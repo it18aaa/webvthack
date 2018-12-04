@@ -106,8 +106,8 @@ void MainWindow::construct_postData()
     postData.addQueryItem("__EVENTVALIDATION", EventValidation);
     postData.addQueryItem("EntryBox", "1");
     postData.addQueryItem("mode", "0");
-    postData.addQueryItem("txtBadge", "1294");
-    postData.addQueryItem("txtPin", "1294");
+    postData.addQueryItem("txtBadge", "");
+    postData.addQueryItem("txtPin", "");
     postData.addQueryItem("btnClocking", "Clocking");
     postData.addQueryItem("ServerTime", "Server Time  16:07:55");
 }
