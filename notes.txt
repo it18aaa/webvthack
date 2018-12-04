@@ -1,0 +1,54 @@
+QWebEngine scraping notes...
+
+
+-------=-=-=-={[ JAVASCRIPT STUFF ]}=-=-=-=------
+
+//////
+
+QWebEnginePage::runJavaScript()  callback method with lambda...
+
+page.runJavaScript("document.title", [](const QVariant &v) {
+        // dump v to debug console
+        qDebug() << v.toString();
+    });
+
+////////////  javascript to get the three post vars
+
+var viewstate = document.getElementById("__VIEWSTATE").value;
+var eventvalidation = document.getElementById("__EVENTVALIDATION").value;
+var viewstategenerator = document.getElementById("__VIEWSTATEGENERATOR").value;
+
+
+----------=-=-=-={[ Post Data construction ]}=-=-=-=-=-=-------
+
+QUrl serviceUrl = QUrl("http://flextime/flextime/VTLogin.aspx");
+
+QUrlQuery postData;
+postData.addQueryItem("param1", "string");
+postData.addQueryItem("param2", "string");
+...
+QNetworkRequest request(serviceUrl);
+
+request.setHeader(QNetworkRequest::ContentTypeHeader,
+    "application/x-www-form-urlencoded");
+
+networkManager->post(request, postData.toString(QUrl::FullyEncoded).toUtf8());
+
+
+-=-==-=-=-=-=--=-=-=
+example data:-
+
+postData.addQueryItem("__LASTFOCUS", "");
+postData.addQueryItem("ScriptManager1_HiddenField", ";;AjaxControlToolkit, Version=3.5.40412.0, Culture=neutral, PublicKeyToken=28f01b0e84b6d53e:en-GB:065e08c0-e2d1-42ff-9483-e5c14441b311:475a4ef5:effe2a26:3ac3e789");
+postData.addQueryItem("__EVENTTARGET", "");
+postData.addQueryItem("__EVENTARGUMENT", "");
+postData.addQueryItem("__VIEWSTATE", ViewState);
+postData.addQueryItem("__VIEWSTATEGENERATOR", ViewStateGenerator);
+postData.addQueryItem("__EVENTVALIDATION", EventValidation);
+postData.addQueryItem("EntryBox", "1");
+postData.addQueryItem("mode", "0");
+postData.addQueryItem("txtBadge", "1294");
+postData.addQueryItem("txtPin", "1294");
+postData.addQueryItem("btnClocking", "Clocking");
+postData.addQueryItem("ServerTime", "Server Time  15:15:15");
+
