@@ -8,6 +8,11 @@
 #include <QNetworkRequest>
 #include <QNetworkReply>
 #include <QNetworkAccessManager>
+#include <QNetworkCookie>
+#include <QNetworkCookieJar>
+#include <QWebEngineCookieStore>
+#include <QWebEngineProfile>
+
 
 #include <windows.h>
 
@@ -23,7 +28,7 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
-    void construct_postData();
+
 
 private slots:
     void on_pushButton_clicked();
@@ -31,12 +36,16 @@ private slots:
 private:
     Ui::MainWindow *ui;
     QWebEnginePage *page;
+    QWebEngineCookieStore *webEngineCookieStore;
     QNetworkAccessManager *networkManager;
     QString ViewState;
     QString ViewStateGenerator;
     QString EventValidation;
+    QString urlLoginPage;
+    QString urlClockingPage;
     int properties_captured;
     QUrlQuery postData;
+    QNetworkCookieJar *cookieJar;
 
     QString jsVState;
     QString jsVStateGen;
@@ -44,6 +53,8 @@ private:
 
     QTimer timerInterval;
     QTimer *timerPageLoad;
+
+    void construct_postData();
 
 };
 

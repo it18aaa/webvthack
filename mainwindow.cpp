@@ -7,75 +7,86 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
 
-
-    // javascript to extract state variables
+    // javascript to extract ASP.NET state variables
     //
-     jsVState = "document.getElementById('__VIEWSTATE').value;";
-     jsEVal = "document.getElementById('__EVENTVALIDATION').value;";
-     jsVStateGen = "document.getElementById('__VIEWSTATEGENERATOR').value;";
-     properties_captured = 0;
+    jsVState = "document.getElementById('__VIEWSTATE').value;";
+    jsEVal = "document.getElementById('__EVENTVALIDATION').value;";
+    jsVStateGen = "document.getElementById('__VIEWSTATEGENERATOR').value;";
 
+    QString jsLoginState = "document.";
+
+    urlLoginPage = "http://flextime/flextime/VTLogin.aspx";;
+    urlClockingPage = "http://flextime/Flextime/Asp/Clocking/Clock.aspx?";
+
+    properties_captured = 0;         // not used yet?
+
+    // create our network access manager
     networkManager = new QNetworkAccessManager();
+    cookieJar = new QNetworkCookieJar(this);
+    networkManager->setCookieJar(cookieJar);
+    webEngineCookieStore = QWebEngineProfile::defaultProfile()->cookieStore();
 
-    QWebEngineView *view = ui->webView;
+    page = new QWebEnginePage(this);
+    page->load(QUrl("http://flextime/flextime/VTLogin.aspx"));
 
-    // load the page into the view
-    //
-    view->load(QUrl("http://flextime/flextime/VTLogin.aspx"));
-
-    // when the page has finished loading, grab the 3 state variables
+    // lambda to scrape 3 state variables
     // and populate appropriate objects async
     //  probably need callbacks on 3 variables
     //
-    connect(view, &QWebEngineView::loadFinished, [this, view]() {
-        view->page()->runJavaScript(jsVState, [this](const QVariant &v) {
+    connect(page, &QWebEnginePage::loadFinished, [this]() {
+        page->runJavaScript(jsVState, [this](const QVariant &v) {
             ViewState = v.toString();
             properties_captured++;
-
         });
-        view->page()->runJavaScript(jsEVal, [this](const QVariant &v) {
-            EventValidation = v.toString();
+        page->runJavaScript(jsEVal, [this](const QVariant &v) {
+            EventValidation = v.toString();           
             properties_captured++;
+
         });
-        view->page()->runJavaScript(jsVStateGen , [this](const QVariant &v) {
+        page->runJavaScript(jsVStateGen , [this](const QVariant &v) {
             ViewStateGenerator = v.toString();
-
-
             properties_captured++;
         });
     });
 
-
-    // now we need to construct the post data
+    // hacked in timer
+    // wait for async javascript to return after 5 seconds
+    //  TODO: replace with callbacks
     //
+    QTimer::singleShot(2000, this, [this]() {
+        // construct the post data
+        construct_postData();
+        QNetworkRequest request(urlLoginPage);
 
-    // hacked in timer to do stuff after 5 seconds
-    //
-    QTimer::singleShot(5000, this, [this]() {
+        request.setHeader(QNetworkRequest::ContentTypeHeader,
+            "application/x-www-form-urlencoded");
 
-            ui->plainTextEdit->appendPlainText("Constructing Post data");
-            construct_postData();
-            ui->plainTextEdit->appendPlainText(postData.toString());
-            ui->plainTextEdit->appendPlainText("Doing Login stuff now !");
+        QNetworkReply *reply =
+                networkManager->post(request, postData.toString(QUrl::FullyEncoded).toUtf8());
 
-            QNetworkRequest request(QUrl("http://flextime/flextime/VTLogin.aspx"));
-            request.setHeader(QNetworkRequest::ContentTypeHeader,
-                "application/x-www-form-urlencoded");
+        connect(reply, &QNetworkReply::finished, [reply, this]() {
 
-            QString data = postData.toString(QUrl::FullyEncoded).toUtf8();
+            QVariant cookieVariant = reply->header(QNetworkRequest::SetCookieHeader);
+            if (cookieVariant.isValid()) {
+                QList<QNetworkCookie> cookies = cookieVariant.value<QList<QNetworkCookie>>();
+                cookieJar->setCookiesFromUrl(cookies, urlLoginPage);
+                cookieJar->setCookiesFromUrl(cookies, urlClockingPage);
+            }
 
-            ui->plainTextEdit->appendPlainText(data);
+            QList<QNetworkCookie> cookies =
+                    cookieJar->cookiesForUrl(urlClockingPage);
 
-            QNetworkReply *reply = networkManager->post(request, postData.toString(QUrl::FullyEncoded).toUtf8());
-            connect(reply, &QNetworkReply::finished, [reply, this]() {
+            foreach(QNetworkCookie cookie, cookies) {
+                webEngineCookieStore->setCookie(cookie);
+            }
 
-                qDebug() << reply->readAll();
 
+            QTimer::singleShot(2000, this, [this]() {
+                ui->webView->load(urlClockingPage);
+                ui->webView->show();
             });
 
-
-
-
+        });
 
     });
 }
@@ -83,47 +94,34 @@ MainWindow::MainWindow(QWidget *parent) :
 
 void MainWindow::construct_postData()
 {
-    ui->plainTextEdit->appendPlainText("ViewState: ");
-    ui->plainTextEdit->appendPlainText(ViewState);
-    ui->plainTextEdit->appendPlainText("\n\n");
-
-    ui->plainTextEdit->appendPlainText("ViewStateGenerator: ");
-    ui->plainTextEdit->appendPlainText(ViewStateGenerator);
-    ui->plainTextEdit->appendPlainText("\n\n");
-
-    ui->plainTextEdit->appendPlainText("EventValidation: ");
-    ui->plainTextEdit->appendPlainText(EventValidation);
-    ui->plainTextEdit->appendPlainText("\n\n");
-
-
-
     postData.addQueryItem("__LASTFOCUS", "");
     postData.addQueryItem("ScriptManager1_HiddenField", ";;AjaxControlToolkit, Version=3.5.40412.0, Culture=neutral, PublicKeyToken=28f01b0e84b6d53e:en-GB:065e08c0-e2d1-42ff-9483-e5c14441b311:475a4ef5:effe2a26:3ac3e789");
     postData.addQueryItem("__EVENTTARGET", "");
     postData.addQueryItem("__EVENTARGUMENT", "");
-    postData.addQueryItem("__VIEWSTATE", ViewState);
-    postData.addQueryItem("__VIEWSTATEGENERATOR", ViewStateGenerator);
-    postData.addQueryItem("__EVENTVALIDATION", EventValidation);
+
+    // Base64 encoded state variables require encoding separately, as QUrlQuery does not
+    // encode spaces and plus signs consistently
+
+    postData.addQueryItem("__VIEWSTATE", QUrl::toPercentEncoding(ViewState));
+    postData.addQueryItem("__VIEWSTATEGENERATOR", QUrl::toPercentEncoding(ViewStateGenerator));
+    postData.addQueryItem("__EVENTVALIDATION", QUrl::toPercentEncoding(EventValidation));
     postData.addQueryItem("EntryBox", "1");
     postData.addQueryItem("mode", "0");
-    postData.addQueryItem("txtBadge", "");
-    postData.addQueryItem("txtPin", "");
+    postData.addQueryItem("txtBadge", "1294");
+    postData.addQueryItem("txtPin", "1294");
     postData.addQueryItem("btnClocking", "Clocking");
     postData.addQueryItem("ServerTime", "Server Time  16:07:55");
 }
 
-
-
 MainWindow::~MainWindow()
 {
+    networkManager->deleteLater();
     delete ui;
-
 }
 
 
 
 void MainWindow::on_pushButton_clicked()
 {
-
 
 }
