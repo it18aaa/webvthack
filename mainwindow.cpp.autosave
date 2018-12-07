@@ -87,7 +87,7 @@ MainWindow::MainWindow(QWidget *parent) :
                 ui->webView->load(urlClockingPage);
                 ui->webView->show();
                 connect(ui->webView, &QWebEngineView::loadFinished, [this]() {
-
+                    
                 });
 
 
