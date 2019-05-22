@@ -12,6 +12,8 @@
 #include <QNetworkCookieJar>
 #include <QWebEngineCookieStore>
 #include <QWebEngineProfile>
+#include <QHash>
+#include <QStringList>
 
 
 #include <windows.h>
@@ -28,28 +30,32 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+signals:
+    void aspStateVarCaptured(QString name, QString var);
+    void aspStateVarsDone();
 
+private slots:    
+    void addASPStateVar(QString name, QString var);
+    void doScrape();
+    void doLoginPage();
+    void getStateVars(QWebEnginePage* page);
+    void pageLoadFinished(bool);
 
-private slots:
-    void on_pushButton_clicked();
 
 private:
     Ui::MainWindow *ui;
     QWebEnginePage *page;
     QWebEngineCookieStore *webEngineCookieStore;
     QNetworkAccessManager *networkManager;
-    QString ViewState;
-    QString ViewStateGenerator;
-    QString EventValidation;
+
+    QStringList aspVars;
+    QHash<QString, QString> postVars;
+
     QString urlLoginPage;
     QString urlClockingPage;
     int properties_captured;
     QUrlQuery postData;
     QNetworkCookieJar *cookieJar;
-
-    QString jsVState;
-    QString jsVStateGen;
-    QString jsEVal;
 
     QTimer timerInterval;
     QTimer *timerPageLoad;
