@@ -7,6 +7,9 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
 
+
+
+
     // init some vars
     urlLoginPage = "http://flextime/flextime/VTLogin.aspx";
     urlClockingPage = "http://flextime/Flextime/Asp/Clocking/Clock.aspx?";
@@ -18,25 +21,35 @@ MainWindow::MainWindow(QWidget *parent) :
     // create our network access manager
     // and init cookie stuff
     networkManager = new QNetworkAccessManager();
+
     cookieJar = new QNetworkCookieJar();
     networkManager->setCookieJar(cookieJar);
+
     webEngineCookieStore = QWebEngineProfile::defaultProfile()->cookieStore();
 
     // init web engine page
-    page = new QWebEnginePage(this);
+    webPageLogin = new QWebEnginePage(this);
+    webPageClocking = new QWebEnginePage(this);
 
     // connect ASP Variable signals
     connect(this, SIGNAL(aspStateVarCaptured(QString, QString)),
-            this, SLOT(addASPStateVar(QString, QString)));
+            this, SLOT(addStateVarToPostData(QString, QString)));
 
     connect(this, SIGNAL(aspStateVarsDone()),
-            this, SLOT(doLoginPage()));
+            this, SLOT(getCookiesFromClockingPage()));
 
     connect(this->ui->pushButton, SIGNAL(clicked()),
-                         this, SLOT(doScrape()));
+                         this, SLOT(scrapeASPVars()));
 
-    connect(page, SIGNAL(loadFinished(bool)),
-            this, SLOT(pageLoadFinished(bool)));
+    connect(webPageLogin, SIGNAL(loadFinished(bool)),
+            this, SLOT(webPageLoginLoadFinished(bool)));
+
+    connect(webPageClocking, SIGNAL(loadFinished(bool)),
+            this, SLOT(scrapeClockingInfo(bool)));
+
+    connect(this, SIGNAL(gotClockingHtml(const QString&)),
+            this, SLOT(handleClockingHtml(const QString&)));
+
 
 
 
@@ -49,9 +62,10 @@ MainWindow::MainWindow(QWidget *parent) :
 //    });
 }
 
-void MainWindow::pageLoadFinished(bool ok) {
+void MainWindow::webPageLoginLoadFinished(bool ok) {
+
     if(ok) {
-        getStateVars(page);  // this fires off its own signal
+        getStateVars(webPageLogin);  // this fires off its own signal
 
     } else {
         // cant update status, needs to grey out icon
@@ -59,17 +73,54 @@ void MainWindow::pageLoadFinished(bool ok) {
 }
 
 
+
+void MainWindow::scrapeClockingInfo(bool)
+{
+
+    // ref webPageClocking
+    //ui->plainTextEdit->appendPlainText("Clocking info scraping!!");
+
+    //ui->webView->setPage(webPageClocking);
+    //ui->webView->show();
+
+    webPageClocking->toHtml([this](const QString& result) mutable {
+        emit gotClockingHtml(result);
+    });
+
+}
+
+void MainWindow::handleClockingHtml(const QString &html)
+{
+       ui->plainTextEdit->appendHtml("Got HTML INFO :-)");
+       qDebug() << html;
+
+       if(html.contains("<font class=\"label\">Clocked In</font>")) {
+           ui->plainTextEdit->appendHtml("You are logged in");
+       } else {
+           ui->plainTextEdit->appendHtml("You are not logged in!");
+       }
+
+       QString searchStr = "Timeworked = ";
+
+       int where = html.indexOf(searchStr,1000, Qt::CaseSensitivity::CaseSensitive);
+       bool i = html.contains(searchStr);
+       ui->plainTextEdit->appendPlainText(searchStr + ": " + QString::number(where));
+       ui->plainTextEdit->appendPlainText("Is "+searchStr+" in string = " + QString::number(i));
+
+}
+
+
+
+
 void MainWindow::construct_postData()
 {
+    qDebug() << "constructing postData()";
     postData.addQueryItem("__LASTFOCUS", "");
     postData.addQueryItem("ScriptManager1_HiddenField", ";;AjaxControlToolkit, Version=3.5.40412.0, Culture=neutral, PublicKeyToken=28f01b0e84b6d53e:en-GB:065e08c0-e2d1-42ff-9483-e5c14441b311:475a4ef5:effe2a26:3ac3e789");
     postData.addQueryItem("__EVENTTARGET", "");
     postData.addQueryItem("__EVENTARGUMENT", "");
     postData.addQueryItem("EntryBox", "1");
     postData.addQueryItem("mode", "0");
-    //postData.addQueryItem("txtBadge", "1294");
-    //postData.addQueryItem("txtPin", "1294");
-
     postData.addQueryItem("txtBadge", ui->lineEditBadge->text());
     postData.addQueryItem("txtPin", ui->lineEditPin->text());
     postData.addQueryItem("btnClocking", "Clocking");
@@ -82,23 +133,15 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::doScrape() {
+void MainWindow::scrapeASPVars() {
 
     // this can be lobbed in another function
 
     postData.clear();
 
-
-    // loads the page & and runs javascript to scrape
-    // the 3 asp state variables from the intro page
-    // and fire off the relevant signal
-//    connect(page, &QWebEnginePage::loadFinished, [this]() {
-//        getStateVars(page);
-//    });
-
     // signals/slots and callbacks are initialised,
     // do the page load
-    page->load(QUrl(urlLoginPage));
+    webPageLogin->load(QUrl(urlLoginPage));
 }
 
 void MainWindow::getStateVars(QWebEnginePage *page) {
@@ -115,10 +158,10 @@ void MainWindow::getStateVars(QWebEnginePage *page) {
 
 // slot for doing stuff with the ASP State variables
 //
-void MainWindow::addASPStateVar(QString name, QString value) {
+void MainWindow::addStateVarToPostData(QString name, QString value) {
 
     // show the var to the display
-    ui->plainTextEdit->appendPlainText("ASP VAR: " + name + ": " + value);
+    //ui->plainTextEdit->appendPlainText("ASP VAR: " + name + ": " + value);
 
     // Base64 encoded state variables require encoding separately, as QUrlQuery does not
     // encode spaces and plus signs consistently
@@ -144,7 +187,7 @@ void MainWindow::addASPStateVar(QString name, QString value) {
 
 // slot for doing the login page stuff
 //
-void MainWindow::doLoginPage() {
+void MainWindow::getCookiesFromClockingPage() {
 
 
     // construct the post data, asp vars have already been added
@@ -176,25 +219,17 @@ void MainWindow::doLoginPage() {
             webEngineCookieStore->setCookie(cookie);
         }
 
+        // so we have the appropriate cookies
+        // and also the ASP state variables have been scraped
+        // we can now simply load up the Clocking page and scrape
+        // the appropriate information.
 
 
-    // this keeps getting connected, so is a bug
+        webPageClocking->load(urlClockingPage);
 
-        QTimer::singleShot(2000, this, [this]() {
+//        ui->webView->setPage(webPageClocking);
+//        ui->webView->show();
 
-//            connect(ui->webView, &QWebEngineView::loadFinished, [this]() {
-
-//                this->ui->plainTextEdit->appendPlainText("Loading finished!");
-//            });
-
-            // the following is just to view, we don't want to do that,
-            // what we want is to load the clocling page into a 'clocking page'
-            // and read off the the details with a nice bit of javascript
-            // and then store them as a status
-
-            ui->webView->load(urlClockingPage); // do stuff with clocking page now
-            ui->webView->show();
-        });
 
     });
 

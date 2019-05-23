@@ -23,7 +23,11 @@
      </widget>
     </item>
     <item>
-     <widget class="QLineEdit" name="lineEditBadge"/>
+     <widget class="QLineEdit" name="lineEditBadge">
+      <property name="text">
+       <string>1294</string>
+      </property>
+     </widget>
     </item>
     <item>
      <widget class="QLabel" name="label_2">
@@ -34,6 +38,9 @@
     </item>
     <item>
      <widget class="QLineEdit" name="lineEditPin">
+      <property name="text">
+       <string>1294</string>
+      </property>
       <property name="echoMode">
        <enum>QLineEdit::Password</enum>
       </property>

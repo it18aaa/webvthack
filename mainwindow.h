@@ -30,21 +30,33 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+    enum clockStatus { CLOCKED_IN=0,
+                       CLOCKED_OUT,
+                       UNKNOWN };
+
 signals:
     void aspStateVarCaptured(QString name, QString var);
     void aspStateVarsDone();
+    void gotCookiesGotStateDoStuff();
+    void gotClockingHtml(const QString &);
 
 private slots:    
-    void addASPStateVar(QString name, QString var);
-    void doScrape();
-    void doLoginPage();
-    void getStateVars(QWebEnginePage* page);
-    void pageLoadFinished(bool);
+    void addStateVarToPostData(QString name, QString var);
+    void scrapeASPVars();
+    void getStateVars(QWebEnginePage* webPageLogin);
 
+    void getCookiesFromClockingPage();
+    void webPageLoginLoadFinished(bool);
+
+    void scrapeClockingInfo(bool);
+    void handleClockingHtml(const QString &);
 
 private:
     Ui::MainWindow *ui;
-    QWebEnginePage *page;
+
+    QWebEnginePage *webPageLogin;
+    QWebEnginePage *webPageClocking;
+
     QWebEngineCookieStore *webEngineCookieStore;
     QNetworkAccessManager *networkManager;
 
